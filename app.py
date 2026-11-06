@@ -93,30 +93,31 @@ STUDIOS = {
     "Basic Room": {
         "description": "Pilihan warna background basic untuk foto bersama teman, pasangan, atau keluarga.",
         "backgrounds": ["White", "Maroon", "Soft Grey", "Silver", "Abstrac Blue"],
-        "people": "1–8 orang",
     },
     "Close Up Room": {
         "description": "Konsep close-up dengan pilihan background Polka, Rainbow, dan Star.",
         "backgrounds": ["Polka", "Rainbow", "Star"],
-        "people": "1–2 orang",
     },
 }
 
 PACKAGES = {
     "Basic Photo": {
         "price": 35000,
+        "people": "1-8 orang",
         "duration": "20 menit sesi foto",
         "prints": "1 print basic frame",
         "details": "Unlimited jepret • soft file dikirim digital",
     },
     "Vintage Photo": {
         "price": 40000,
+        "people": "1-4 orang",
         "duration": "20 menit sesi foto",
         "prints": "1 print vintage frame",
         "details": "Unlimited jepret • soft file dikirim digital",
     },
     "XXL Photo": {
         "price": 65000,
+        "people": "1-6 orang",
         "duration": "20 menit sesi foto",
         "prints": "1 print XXL frame",
         "details": "Unlimited jepret • soft file dikirim digital",
