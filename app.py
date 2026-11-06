@@ -90,44 +90,47 @@ div[data-testid="stAlert"] { border-radius:14px; }
 """, unsafe_allow_html=True)
 
 STUDIOS = {
-    "Basic Studio": {
+    "Basic Room": {
         "description": "Pilihan warna background basic untuk foto bersama teman, pasangan, atau keluarga.",
-        "backgrounds": ["Light Grey", "Maroon", "Dark Grey", "Soft Pink", "Choco", "Olive Green"],
+        "backgrounds": ["White", "Maroon", "Soft Grey", "Silver", "Abstrac Blue"],
+        "people": "1–8 orang",
     },
     "Close Up Room": {
-        "description": "Konsep close-up dengan pilihan background Polka, Blue, dan Star.",
-        "backgrounds": ["Polka", "Blue", "Star"],
-    },
-    "Pas Photo Session": {
-        "description": "Sesi foto formal untuk kebutuhan pas foto.",
-        "backgrounds": ["Blue", "White", "Red"],
+        "description": "Konsep close-up dengan pilihan background Polka, Rainbow, dan Star.",
+        "backgrounds": ["Polka", "Rainbow", "Star"],
+        "people": "1–2 orang",
     },
 }
 
 PACKAGES = {
-    "Self Photo Session": {
-        "price": 30000,
-        "people": "1–2 orang",
-        "duration": "10 menit sesi foto",
+    "Basic Photo": {
+        "price": 35000,
+        "duration": "20 menit sesi foto",
         "prints": "1 print basic frame",
         "details": "Unlimited jepret • soft file dikirim digital",
     },
-    "Party Photo Session": {
-        "price": 75000,
-        "people": "3–8 orang",
-        "duration": "15 menit sesi foto",
-        "prints": "2 print basic frame",
+    "Vintage Photo": {
+        "price": 40000,
+        "duration": "20 menit sesi foto",
+        "prints": "1 print vintage frame",
+        "details": "Unlimited jepret • soft file dikirim digital",
+    },
+    "XXL Photo": {
+        "price": 65000,
+        "duration": "20 menit sesi foto",
+        "prints": "1 print XXL frame",
         "details": "Unlimited jepret • soft file dikirim digital",
     },
 }
 
 # Atur jam operasional dan interval slot di sini.
 TIME_SLOTS = [
-    "09:00", "09:30", "10:00", "10:30",
-    "12:30", "13:00", "13:30", "14:00",
-    "14:30", "15:00", "15:30", "16:00",
-    "16:30", "17:00", "17:30", "18:00",
-    "18:30", "19:00", "19:30", "20:00",
+    "10:00", "10:30", "11:00", "11:30",
+    "12:00", "12:30", "13:00", "13:30",
+    "14:00", "14:30", "15:00", "15:30",
+    "16:00", "16:30", "17:00", "17:30",
+    "18:00", "18:30", "19:00", "19:30",
+    "20.00", "20.30", "21.00"
 ]
 
 def booked_slots(day):
