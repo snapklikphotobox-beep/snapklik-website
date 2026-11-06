@@ -1,5 +1,5 @@
 import streamlit as st
-import sqlite3
+from supabase import create_client
 from pathlib import Path
 from datetime import date, datetime, timedelta
 import re
@@ -10,11 +10,10 @@ import pandas as pd
 # ============================================================
 # SNAPKLIK PHOTOBOX - SISTEM BOOKING
 # Jalankan: streamlit run app.py
-# Database SQLite dibuat otomatis di folder yang sama.
+# Database booking tersimpan di Supabase (cloud).
 # ============================================================
 
 APP_DIR = Path(__file__).resolve().parent
-DB_PATH = APP_DIR / "snapklik_bookings.db"
 
 st.set_page_config(
     page_title="SnapKlik | Booking Photobox",
@@ -22,6 +21,27 @@ st.set_page_config(
     layout="centered",
     initial_sidebar_state="expanded",
 )
+
+@st.cache_resource
+def get_supabase():
+    """Membuat koneksi Supabase menggunakan secret server-side."""
+    try:
+        url = (st.secrets.get("SUPABASE_URL", "")
+               or st.secrets.get("supabase", {}).get("url", "")
+               or os.environ.get("SUPABASE_URL", ""))
+        key = (st.secrets.get("SUPABASE_SERVICE_ROLE_KEY", "")
+               or st.secrets.get("supabase", {}).get("service_role_key", "")
+               or os.environ.get("SUPABASE_SERVICE_ROLE_KEY", ""))
+    except Exception:
+        url = os.environ.get("SUPABASE_URL", "")
+        key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+
+    if not url or not key:
+        st.error("Koneksi Supabase belum dikonfigurasi. Isi SUPABASE_URL dan SUPABASE_SERVICE_ROLE_KEY di Streamlit Secrets.")
+        st.stop()
+    return create_client(url, key)
+
+supabase = get_supabase()
 
 # Palet warna terinspirasi dari referensi: cream, maroon, putih.
 st.markdown("""
@@ -110,41 +130,15 @@ TIME_SLOTS = [
     "18:30", "19:00", "19:30", "20:00",
 ]
 
-def db():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-def init_db():
-    with db() as conn:
-        conn.execute("""
-        CREATE TABLE IF NOT EXISTS bookings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            booking_code TEXT UNIQUE NOT NULL,
-            created_at TEXT NOT NULL,
-            studio TEXT NOT NULL,
-            package_name TEXT NOT NULL,
-            background TEXT NOT NULL,
-            booking_date TEXT NOT NULL,
-            booking_time TEXT NOT NULL,
-            customer_name TEXT NOT NULL,
-            phone TEXT NOT NULL,
-            email TEXT,
-            people INTEGER NOT NULL,
-            notes TEXT,
-            total INTEGER NOT NULL,
-            status TEXT NOT NULL DEFAULT 'Menunggu konfirmasi',
-            UNIQUE(booking_date, booking_time)
-        )
-        """)
-
 def booked_slots(day):
-    with db() as conn:
-        rows = conn.execute(
-            "SELECT booking_time FROM bookings WHERE booking_date=? AND status!='Dibatalkan'",
-            (day.isoformat(),)
-        ).fetchall()
-    return {r["booking_time"] for r in rows}
+    """Mengambil jam yang sudah terisi dari Supabase."""
+    response = (supabase.table("bookings")
+                .select("booking_time")
+                .eq("booking_date", day.isoformat())
+                .neq("status", "Dibatalkan")
+                .execute())
+    return {row["booking_time"] for row in (response.data or [])}
+
 def rupiah(amount):
     return "Rp" + f"{amount:,.0f}".replace(",", ".")
 
@@ -163,7 +157,6 @@ def reset_booking():
         st.session_state.pop(key, None)
     st.session_state.stage = 1
 
-init_db()
 
 # ============================================================
 # NAVIGASI SIDEBAR + HALAMAN ADMIN
@@ -211,8 +204,15 @@ if page == "Admin":
             st.session_state.admin_logged_in = False
             st.rerun()
 
-    with db() as conn:
-        df = pd.read_sql_query("SELECT * FROM bookings ORDER BY created_at DESC", conn)
+    try:
+        response = (supabase.table("bookings")
+                    .select("*")
+                    .order("created_at", desc=True)
+                    .execute())
+        df = pd.DataFrame(response.data or [])
+    except Exception as exc:
+        st.error(f"Gagal mengambil data booking dari Supabase: {exc}")
+        st.stop()
 
     if df.empty:
         st.info("Belum ada booking yang masuk. Pesanan pelanggan akan muncul di halaman ini.")
@@ -265,10 +265,15 @@ if page == "Admin":
         current_status = selected_row["status"] if selected_row["status"] in status_list else status_list[0]
         new_status = st.selectbox("Ubah status", status_list, index=status_list.index(current_status), key="admin_new_status")
         if st.button("Simpan Status", type="primary", key="save_booking_status"):
-            with db() as conn:
-                conn.execute("UPDATE bookings SET status=? WHERE booking_code=?", (new_status, selected_code))
-            st.success(f"Status {selected_code} berhasil diperbarui menjadi {new_status}.")
-            st.rerun()
+            try:
+                (supabase.table("bookings")
+                 .update({"status": new_status})
+                 .eq("booking_code", selected_code)
+                 .execute())
+                st.success(f"Status {selected_code} berhasil diperbarui menjadi {new_status}.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Gagal memperbarui status booking: {exc}")
     else:
         st.caption("Tidak ada booking yang cocok dengan pencarian atau filter.")
 
@@ -423,28 +428,34 @@ elif st.session_state.stage == 4:
         elif not agree:
             st.error("Centang persetujuan sebelum melanjutkan.")
         else:
-            code = "SK" + datetime.now().strftime("%y%m%d%H%M%S")
+            code = "SK" + datetime.now().strftime("%y%m%d%H%M%S%f")
+            booking_payload = {
+                "booking_code": code,
+                "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+                "studio": st.session_state.studio,
+                "package_name": st.session_state.package,
+                "background": st.session_state.background,
+                "booking_date": st.session_state.booking_date.isoformat(),
+                "booking_time": st.session_state.booking_time,
+                "customer_name": customer_name.strip(),
+                "phone": clean_phone,
+                "email": email.strip() or None,
+                "people": int(people),
+                "notes": notes.strip() or None,
+                "total": package["price"],
+            }
             try:
-                with db() as conn:
-                    conn.execute("""
-                    INSERT INTO bookings
-                    (booking_code, created_at, studio, package_name, background,
-                     booking_date, booking_time, customer_name, phone, email,
-                     people, notes, total)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        code, datetime.now().isoformat(timespec="seconds"),
-                        st.session_state.studio, st.session_state.package,
-                        st.session_state.background, st.session_state.booking_date.isoformat(),
-                        st.session_state.booking_time, customer_name.strip(), clean_phone,
-                        email.strip(), int(people), notes.strip(), package["price"]
-                    ))
+                supabase.table("bookings").insert(booking_payload).execute()
                 st.session_state.confirmed_code = code
                 st.session_state.confirmed_name = customer_name.strip()
                 st.session_state.stage = 5
                 st.rerun()
-            except sqlite3.IntegrityError:
-                st.error("Maaf, slot ini baru saja dipesan orang lain. Silakan kembali dan pilih jam lain.")
+            except Exception as exc:
+                error_text = str(exc).lower()
+                if "23505" in error_text or "duplicate" in error_text or "unique" in error_text:
+                    st.error("Maaf, slot ini baru saja dipesan orang lain. Silakan kembali dan pilih jam lain.")
+                else:
+                    st.error(f"Booking belum berhasil disimpan. Periksa koneksi Supabase atau hubungi admin. Detail: {exc}")
 
     if st.button("← Kembali", type="secondary"):
         st.session_state.stage = 3
