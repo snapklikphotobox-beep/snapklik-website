@@ -3,6 +3,7 @@ from supabase import create_client
 from datetime import date, datetime, timedelta, time
 import os
 import hmac
+import re
 import pandas as pd
 
 # ============================================================
@@ -270,7 +271,10 @@ if page == "Admin":
     m3.metric("Dikonfirmasi", confirmed)
     m4.metric("Selesai", completed)
 
-    search = st.text_input("Cari tanggal atau kode booking", placeholder="Contoh: SK atau 2026-11-08")
+    search = st.text_input(
+        "Cari booking",
+        placeholder="Nama, nomor WhatsApp, kode booking, atau tanggal",
+    )
     status_options = ["Semua", "Menunggu konfirmasi", "Dikonfirmasi", "Selesai", "Dibatalkan"]
     chosen_status = st.selectbox("Filter status", status_options)
     filtered = df.copy()
@@ -278,14 +282,26 @@ if page == "Admin":
         filtered = filtered[filtered["status"] == chosen_status]
     if search.strip():
         q = search.strip().lower()
-        filtered = filtered[
-            filtered["booking_code"].fillna("").astype(str).str.lower().str.contains(q, regex=False)
-            | filtered["booking_date"].fillna("").astype(str).str.lower().str.contains(q, regex=False)
-        ]
+        searchable_columns = ["booking_code", "booking_date", "customer_name", "phone"]
+        mask = pd.Series(False, index=filtered.index)
+        for column in searchable_columns:
+            if column in filtered.columns:
+                mask = mask | filtered[column].fillna("").astype(str).str.lower().str.contains(q, regex=False)
+        filtered = filtered[mask]
 
-    display = filtered[["booking_code", "booking_date", "booking_time", "status"]].rename(columns={
-        "booking_code": "Kode Booking", "booking_date": "Tanggal",
-        "booking_time": "Jam", "status": "Status"
+    for col, default in {"customer_name": "-", "phone": "-", "email": "-"}.items():
+        if col not in filtered.columns:
+            filtered[col] = default
+
+    display_columns = ["booking_code", "customer_name", "phone", "email", "booking_date", "booking_time", "status"]
+    display = filtered[display_columns].rename(columns={
+        "booking_code": "Kode Booking",
+        "customer_name": "Nama",
+        "phone": "WhatsApp",
+        "email": "Email",
+        "booking_date": "Tanggal",
+        "booking_time": "Jam",
+        "status": "Status",
     })
     st.dataframe(display, use_container_width=True, hide_index=True)
     st.download_button(
@@ -365,39 +381,62 @@ if available_slots:
         label_visibility="collapsed",
     )
     st.caption(f"{len(available_slots)} pilihan waktu tersedia.")
-    if st.button("Booking Sekarang", type="primary", use_container_width=True):
-        booking_code = "SK" + datetime.now().strftime("%y%m%d%H%M%S%f")
-        payload = {
-            "booking_code": booking_code,
-            "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
-            "booking_date": selected_date.isoformat(),
-            "booking_time": selected_time,
-            "customer_name": "Pelanggan",
-            "phone": "-",
-            "email": None,
-            # Nilai bawaan menjaga kompatibilitas dengan kolom wajib
-            # pada tabel bookings versi aplikasi sebelumnya.
-            "studio": "Booking Jadwal",
-            "package_name": "Booking Jadwal",
-            "background": "-",
-            "people": 1,
-            "notes": None,
-            "total": 0,
-            "status": "Menunggu konfirmasi",
-        }
-        try:
-            supabase.table(BOOKINGS_TABLE).insert(payload).execute()
-            st.session_state.last_booking_code = booking_code
-            st.session_state.last_booking_date = selected_date
-            st.session_state.last_booking_time = selected_time
-            st.session_state.booking_success = True
-            st.rerun()
-        except Exception as exc:
-            error_text = str(exc).lower()
-            if "23505" in error_text or "duplicate" in error_text or "unique" in error_text:
-                st.error("Maaf, jam tersebut baru saja dipesan. Silakan pilih jam lainnya.")
-            else:
-                st.error(f"Booking belum berhasil disimpan. Detail: {exc}")
+
+    st.markdown("### Data Diri")
+    st.caption("Isi data berikut agar admin SnapKlik dapat menghubungi kamu untuk konfirmasi booking.")
+    with st.form("customer_booking_form"):
+        customer_name = st.text_input("Nama lengkap *", placeholder="Masukkan nama lengkap")
+        phone = st.text_input("Nomor WhatsApp *", placeholder="Contoh: 081234567890")
+        email = st.text_input("Email (opsional)", placeholder="nama@email.com")
+        submitted = st.form_submit_button(
+            "Booking Sekarang",
+            type="primary",
+            use_container_width=True,
+        )
+
+    if submitted:
+        clean_phone = re.sub(r"[\s\-+]", "", phone)
+        if not customer_name.strip():
+            st.error("Nama lengkap wajib diisi.")
+        elif not re.fullmatch(r"0\d{8,13}", clean_phone):
+            st.error("Nomor WhatsApp belum valid. Gunakan format 08xxxxxxxxxx.")
+        elif email.strip() and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email.strip()):
+            st.error("Format email belum valid.")
+        else:
+            booking_code = "SK" + datetime.now().strftime("%y%m%d%H%M%S%f")
+            payload = {
+                "booking_code": booking_code,
+                "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+                "booking_date": selected_date.isoformat(),
+                "booking_time": selected_time,
+                "customer_name": customer_name.strip(),
+                "phone": clean_phone,
+                "email": email.strip() or None,
+                # Nilai bawaan menjaga kompatibilitas dengan kolom wajib
+                # pada tabel bookings versi aplikasi sebelumnya.
+                "studio": "Booking Jadwal",
+                "package_name": "Booking Jadwal",
+                "background": "-",
+                "people": 1,
+                "notes": None,
+                "total": 0,
+                "status": "Menunggu konfirmasi",
+            }
+            try:
+                supabase.table(BOOKINGS_TABLE).insert(payload).execute()
+                st.session_state.last_booking_code = booking_code
+                st.session_state.last_booking_date = selected_date
+                st.session_state.last_booking_time = selected_time
+                st.session_state.last_customer_name = customer_name.strip()
+                st.session_state.last_customer_phone = clean_phone
+                st.session_state.booking_success = True
+                st.rerun()
+            except Exception as exc:
+                error_text = str(exc).lower()
+                if "23505" in error_text or "duplicate" in error_text or "unique" in error_text:
+                    st.error("Maaf, jam tersebut baru saja dipesan. Silakan pilih jam lainnya.")
+                else:
+                    st.error(f"Booking belum berhasil disimpan. Detail: {exc}")
 else:
     st.warning("Semua jam pada tanggal ini sudah dipesan. Silakan pilih tanggal lain.")
 
@@ -410,6 +449,8 @@ if st.session_state.get("booking_success"):
             f"<h2 style='text-align:center'>{st.session_state.last_booking_code}</h2>",
             unsafe_allow_html=True,
         )
+        st.write(f"**Nama:** {st.session_state.last_customer_name}")
+        st.write(f"**WhatsApp:** {st.session_state.last_customer_phone}")
         st.write(f"**Tanggal:** {st.session_state.last_booking_date.strftime('%d/%m/%Y')}")
         st.write(f"**Jam:** {st.session_state.last_booking_time}")
         st.caption("Status: Menunggu konfirmasi admin")
