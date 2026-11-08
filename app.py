@@ -19,7 +19,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-DEFAULT_OPEN = time(09.30, 0)
+DEFAULT_OPEN = time(10, 0)
 DEFAULT_CLOSE = time(21, 0)
 DEFAULT_INTERVAL = 30
 SETTINGS_TABLE = "app_settings"
