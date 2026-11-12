@@ -73,6 +73,40 @@ div.stButton > button { border-radius:13px; min-height:44px; font-weight:700; }
 div.stButton > button[kind="primary"] { background:var(--maroon); border:1px solid var(--maroon); color:white; width:100%; }
 div.stButton > button[kind="secondary"] { border:1px solid #d9c4c6; color:var(--maroon); background:#fff; }
 .stTextInput input, .stNumberInput input, div[data-baseweb="select"] > div { border-radius:11px!important; border-color:#e5d7d4!important; background:#fff!important; }
+
+/* Teks pilihan jam booking: hitam dan tidak transparan */
+[data-testid="stRadio"] label,
+[data-testid="stRadio"] label p,
+[data-testid="stRadio"] label span,
+[data-testid="stRadio"] [data-testid="stMarkdownContainer"] p {
+    color: #000000 !important;
+    opacity: 1 !important;
+}
+
+/* Label Data Diri */
+[data-testid="stWidgetLabel"],
+[data-testid="stWidgetLabel"] p,
+[data-testid="stTextInput"] label,
+[data-testid="stTextInput"] label p {
+    color: #000000 !important;
+    opacity: 1 !important;
+    font-weight: 600 !important;
+}
+
+/* Teks yang diketik di kolom Nama, WhatsApp, dan Email */
+[data-testid="stTextInput"] input {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    opacity: 1 !important;
+}
+
+/* Placeholder dibuat abu-abu gelap agar terbaca */
+[data-testid="stTextInput"] input::placeholder {
+    color: #555555 !important;
+    -webkit-text-fill-color: #555555 !important;
+    opacity: 1 !important;
+}
+
 div[data-testid="stAlert"] { border-radius:13px; }
 .small-note { color:var(--muted); font-size:.82rem; text-align:center; padding-top:12px; }
 @media(max-width:640px) { .block-container{padding:1rem .8rem 2rem;} .hero{padding:25px 15px;} .hero-title{font-size:2rem;} .brandbar{padding:11px 13px;} .brandtag{font-size:.65rem;} }
